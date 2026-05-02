@@ -1,10 +1,10 @@
 # computer-use
 
-macOS computer control as an MCP server. AI agents can take screenshots, click, type, scroll, and more through the Model Context Protocol.
+macOS computer control as an MCP server. AI agents can observe the screen, click, type, scroll, open apps/URLs, use the clipboard, and continue from fresh screenshots through the Model Context Protocol.
 
 ## What is this?
 
-An MCP server that exposes desktop control tools — screenshot, mouse, keyboard, clipboard — so any AI agent (Claude, GPT, etc.) can interact with your computer.
+An MCP server that exposes desktop control tools — screen observation, mouse, keyboard, clipboard, app launch, URL launch, and diagnostics — so any MCP-capable AI agent can interact with your computer.
 
 ## Install
 
@@ -46,18 +46,48 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 claude mcp add computer-use -- bun run /path/to/computer-use/src/index.ts
 ```
 
+## Permissions
+
+macOS permissions are per host process. If you run the server with Bun, grant permissions to `bun`; if you run compiled output with Node, grant them to `node` or the app that launched Node.
+
+Required:
+
+- Screen Recording: `observe` and `screenshot`
+- Accessibility: mouse and keyboard tools
+- Input Monitoring: useful for global hotkeys/background key events
+
+Use the MCP tools `diagnostics`, `screen_info`, and `request_permissions` to inspect status or open the right System Settings pane.
+
+## Coordinate Model
+
+Mouse tools default to `coordinate_space: "native"`, meaning macOS logical coordinates. `observe` and `screenshot` return `nativeWidth` and `nativeHeight`; use that 1512x982-style coordinate space for clicks, moves, and drags.
+
+Pass `coordinate_space: "screenshot"` only when you intentionally have full Retina PNG pixel coordinates.
+
 ## Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the current screen as PNG |
-| `click` | Click at (x, y) with left/right/middle button |
-| `double_click` | Double-click at (x, y) |
-| `mouse_move` | Move cursor to (x, y) |
-| `type` | Type text string |
-| `key` | Press a key (enter, tab, escape, arrows, f1-f12) with optional modifiers |
-| `scroll` | Scroll up/down/left/right |
-| `drag` | Drag from (x1, y1) to (x2, y2) |
+| `observe` | Capture the current screen as PNG plus coordinate metadata |
+| `screenshot` | Compatibility alias for screen capture |
+| `save_screenshot` | Save a PNG screenshot directly to the Desktop |
+| `screen_info` | Display size, scale, and permission diagnostics |
+| `diagnostics` | macOS permission report |
+| `request_permissions` | Open macOS Privacy & Security panes |
+| `click` | Click at (x, y), default native coordinates |
+| `double_click` | Double-click at (x, y), default native coordinates |
+| `move` / `mouse_move` | Move cursor to (x, y) without clicking |
+| `drag` | Drag using `path: [{x,y}, ...]` or legacy start/end coordinates |
+| `scroll` | Scroll using `scrollX`/`scrollY` or legacy `direction`/`amount` |
+| `keypress` | Press agent-style chords like `["command", "l"]` |
+| `press_key` / `key` | Compatibility key press tools |
+| `type_text` / `type` | Type or paste text into the focused UI element |
+| `open_url` | Open a URL through macOS Launch Services |
+| `open_app` | Open an app by name, e.g. `Safari` |
+| `frontmost_app` | Verify which macOS app is currently focused |
+| `browser_state` | Verify Chrome/Safari active tab title and URL |
+| `list_apps` | List installed apps in common Applications folders |
+| `cursor_position` | Return current cursor position in native coordinates |
 | `clipboard_read` | Read system clipboard |
 | `clipboard_write` | Write to system clipboard |
 | `wait` | Wait for specified milliseconds |
@@ -66,7 +96,21 @@ claude mcp add computer-use -- bun run /path/to/computer-use/src/index.ts
 
 - macOS (uses native `screencapture`, `pbcopy`, `pbpaste`)
 - Node.js >= 20 or Bun >= 1.3
-- Accessibility permissions for the terminal app (System Settings > Privacy & Security > Accessibility)
+- Screen Recording and Accessibility permissions for the host app (System Settings > Privacy & Security)
+
+## Smoke Test
+
+```bash
+bun test
+bun run typecheck
+bun run build
+
+# Inspect registered tools without starting an MCP client
+bun -e 'import { createServer } from "./src/server.ts"; console.log(Object.keys(createServer()._registeredTools).sort())'
+
+# Inspect local permission/display state
+bun -e 'import { Computer } from "./src/computer/index.ts"; const c = new Computer(); console.log({ permissions: c.permissions(), display: await c.displayInfo() })'
+```
 
 ## License
 
