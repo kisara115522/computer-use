@@ -43,6 +43,8 @@ Entry: `src/index.ts` → `src/server.ts` (registers all tools) → tools call `
 ## Desktop MCP Usage
 
 - For `cu-desktop`, use `observe` first and after user-visible actions.
+- `observe`/`screenshot` return a vision-sized image block. Inspect that image before clicking; do not claim you are text-only if the image block is present.
+- If the full-screen preview is too small to read, call `screenshot_region` on the relevant native-coordinate area for a closer visual crop.
 - Mouse coordinates are native macOS logical coordinates (`nativeWidth`/`nativeHeight` from `observe`), not Retina PNG pixel coordinates.
 - If screenshot images are not visible to the model, use `screen_ocr` and `browser_state` instead of guessing coordinates.
 - Use `screen_ocr` with `numericOnly: true` or `pattern: "^181"` to locate saved phone-number suggestions.

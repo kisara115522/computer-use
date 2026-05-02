@@ -64,12 +64,27 @@ Mouse tools default to `coordinate_space: "native"`, meaning macOS logical coord
 
 Pass `coordinate_space: "screenshot"` only when you intentionally have full Retina PNG pixel coordinates.
 
+## Vision Output
+
+`observe`, `screenshot`, and `screenshot_region` return a downsized JPEG image block for the model plus text metadata for native coordinates. The full Retina PNG is intentionally not returned as the vision block because Claude Code applies an MCP output limit to image data; large screenshots can be dropped before the model sees them.
+
+Use `screenshot_region` when the full-screen preview is visible but text, buttons, or autocomplete popups are too small to read.
+
+Optional tuning:
+
+```bash
+MAX_MCP_OUTPUT_TOKENS=200000          # Claude Code MCP result budget
+CU_DESKTOP_VISION_MAX_DIMENSION=768   # Larger returned vision image
+CU_DESKTOP_VISION_JPEG_QUALITY=55     # Higher JPEG quality
+```
+
 ## Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `observe` | Capture the current screen as PNG plus coordinate metadata |
-| `screenshot` | Compatibility alias for screen capture |
+| `observe` | Capture the current screen as a vision-sized image plus coordinate metadata |
+| `screenshot` | Compatibility alias for visual screen capture |
+| `screenshot_region` | Capture a cropped region when the full-screen preview is too small |
 | `save_screenshot` | Save a PNG screenshot directly to the Desktop |
 | `screen_info` | Display size, scale, and permission diagnostics |
 | `diagnostics` | macOS permission report |
