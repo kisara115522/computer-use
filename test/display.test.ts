@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clearDisplayInfoCache,
   convertPointToNative,
+  getDisplayInfo,
   parseSystemProfilerDisplays,
   readPngSize,
 } from "../src/computer/display.ts";
@@ -75,5 +77,50 @@ describe("display parsing and coordinate conversion", () => {
     ]);
 
     expect(readPngSize(pngHeader)).toEqual({ width: 3024, height: 1964 });
+  });
+
+  test("caches display profiler reads within the cache window", async () => {
+    clearDisplayInfoCache();
+    let calls = 0;
+    const readProfiler = async () => {
+      calls += 1;
+      return JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                _name: "Color LCD",
+                _spdisplays_displayID: "1",
+                _spdisplays_pixels: "3024 x 1964",
+                _spdisplays_resolution: "1512 x 982 @ 120.00Hz",
+                spdisplays_main: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+    };
+
+    const first = await getDisplayInfo({
+      now: () => 1_000,
+      readProfiler,
+      cacheTtlMs: 10_000,
+    });
+    const second = await getDisplayInfo({
+      now: () => 2_000,
+      readProfiler,
+      cacheTtlMs: 10_000,
+    });
+
+    expect(first).toEqual(second);
+    expect(calls).toBe(1);
+
+    await getDisplayInfo({
+      now: () => 12_001,
+      readProfiler,
+      cacheTtlMs: 10_000,
+    });
+    expect(calls).toBe(2);
+    clearDisplayInfoCache();
   });
 });

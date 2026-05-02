@@ -9,6 +9,42 @@ const FALLBACK_DISPLAY: DisplayInfo = {
   scale: 1,
 };
 
+const DEFAULT_DISPLAY_CACHE_TTL_MS = 10_000;
+
+type DisplayInfoOptions = {
+  now?: () => number;
+  readProfiler?: () => Promise<string>;
+  cacheTtlMs?: number;
+};
+
+let cachedDisplay:
+  | {
+      value: DisplayInfo;
+      expiresAt: number;
+    }
+  | undefined;
+let pendingDisplay: Promise<DisplayInfo> | undefined;
+
+export const clearDisplayInfoCache = (): void => {
+  cachedDisplay = undefined;
+  pendingDisplay = undefined;
+};
+
+const readSystemProfilerDisplays = async (): Promise<string> => {
+  const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
+    execFile(
+      "/usr/sbin/system_profiler",
+      ["SPDisplaysDataType", "-json"],
+      (err, stdout) => {
+        if (err) reject(err);
+        else resolve({ stdout });
+      },
+    );
+  }).catch(() => ({ stdout: "" }));
+
+  return stdout;
+};
+
 const parseSize = (value: unknown): Size | undefined => {
   if (typeof value !== "string") return undefined;
   const match = value.match(/(\d+)\s*x\s*(\d+)/i);
@@ -59,25 +95,45 @@ export const parseSystemProfilerDisplays = (data: unknown): DisplayInfo => {
   };
 };
 
-export const getDisplayInfo = async (): Promise<DisplayInfo> => {
-  const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
-    execFile(
-      "/usr/sbin/system_profiler",
-      ["SPDisplaysDataType", "-json"],
-      (err, stdout) => {
-        if (err) reject(err);
-        else resolve({ stdout });
-      },
-    );
-  }).catch(() => ({ stdout: "" }));
-
-  if (!stdout) return FALLBACK_DISPLAY;
-
-  try {
-    return parseSystemProfilerDisplays(JSON.parse(stdout));
-  } catch {
-    return FALLBACK_DISPLAY;
+export const getDisplayInfo = async (
+  options: DisplayInfoOptions = {},
+): Promise<DisplayInfo> => {
+  const now = (options.now ?? Date.now)();
+  const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_DISPLAY_CACHE_TTL_MS;
+  if (cachedDisplay && cachedDisplay.expiresAt > now) {
+    return cachedDisplay.value;
   }
+
+  if (pendingDisplay) {
+    return pendingDisplay;
+  }
+
+  pendingDisplay = (async () => {
+    try {
+      const stdout = await (options.readProfiler ?? readSystemProfilerDisplays)().catch(
+        () => "",
+      );
+      const value = stdout
+        ? (() => {
+            try {
+              return parseSystemProfilerDisplays(JSON.parse(stdout));
+            } catch {
+              return FALLBACK_DISPLAY;
+            }
+          })()
+        : FALLBACK_DISPLAY;
+
+      cachedDisplay = {
+        value,
+        expiresAt: now + cacheTtlMs,
+      };
+      return value;
+    } finally {
+      pendingDisplay = undefined;
+    }
+  })();
+
+  return pendingDisplay;
 };
 
 export const readPngSize = (buffer: Buffer): Size => {
