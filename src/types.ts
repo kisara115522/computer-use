@@ -30,6 +30,12 @@ export interface Rectangle {
   height: number;
 }
 
+export interface VisionImage {
+  base64: string;
+  mimeType: "image/jpeg" | "image/png";
+  size: Size;
+}
+
 /** Screenshot result */
 export interface ScreenshotResult {
   base64: string;
@@ -40,6 +46,8 @@ export interface ScreenshotResult {
   nativeSize: Size;
   scale: number;
   display: DisplayInfo;
+  /** Smaller image intended for MCP clients that pass screenshots to vision models. */
+  vision?: VisionImage;
 }
 
 /** Mouse button */
@@ -58,6 +66,14 @@ export type ScrollDirection = "up" | "down" | "left" | "right";
 export type AgentAction =
   | { type: "screenshot" }
   | { type: "observe" }
+  | {
+      type: "screenshot_region";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      coordinate_space?: CoordinateSpace;
+    }
   | { type: "click"; x: number; y: number; button?: MouseButton; coordinate_space?: CoordinateSpace }
   | { type: "double_click"; x: number; y: number; coordinate_space?: CoordinateSpace }
   | { type: "type"; text: string }

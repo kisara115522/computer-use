@@ -1,7 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Computer } from "./computer/index.js";
-import type { CoordinateSpace, MouseButton, Point, ScrollDirection } from "./types.js";
+import type {
+  CoordinateSpace,
+  MouseButton,
+  Point,
+  Rectangle,
+  ScreenshotResult,
+  ScrollDirection,
+} from "./types.js";
 
 export interface ServerOptions {
   name?: string;
@@ -31,34 +38,64 @@ const point = (x: number, y: number): Point => ({ x, y });
 const ticksFromDelta = (delta: number): number =>
   Math.max(1, Math.round(Math.abs(delta) / 100));
 
-const screenshotPayload = async (computer: Computer, label: string) => {
-  const result = await computer.screenshot();
+export const buildScreenshotToolResult = (
+  result: ScreenshotResult,
+  label: string,
+  source?: { rect?: Rectangle; coordinateSpace?: CoordinateSpace },
+) => {
+  const vision = result.vision ?? {
+    base64: result.base64,
+    mimeType: result.mimeType,
+    size: result.size,
+  };
   const data = {
     width: result.size.width,
     height: result.size.height,
+    visionWidth: vision.size.width,
+    visionHeight: vision.size.height,
     nativeWidth: result.nativeSize.width,
     nativeHeight: result.nativeSize.height,
     scale: result.scale,
     coordinateSpace: "native",
+    source,
     display: result.display,
     mimeType: result.mimeType,
+    visionMimeType: vision.mimeType,
   };
 
   return {
     content: [
-      { type: "image" as const, data: result.base64, mimeType: result.mimeType },
+      {
+        type: "image" as const,
+        data: vision.base64,
+        mimeType: vision.mimeType,
+        annotations: { audience: ["assistant" as const], priority: 1 },
+      },
       {
         type: "text" as const,
-        text: `${label}: use native coordinates 0-${result.nativeSize.width} x 0-${result.nativeSize.height} for click/move/drag. PNG is ${result.size.width}x${result.size.height}, Retina scale ${result.scale}. Verify with observe/frontmost_app/browser_state before claiming success.`,
+        text: `${label}: vision image is ${vision.size.width}x${vision.size.height} ${vision.mimeType}. ` +
+          `Full PNG backing image is ${result.size.width}x${result.size.height}; native coordinates are ` +
+          `0-${result.nativeSize.width} x 0-${result.nativeSize.height}, Retina scale ${result.scale}. ` +
+          `Use native coordinates for click/move/drag. Metadata: ${JSON.stringify(data)}.`,
+        annotations: { audience: ["assistant" as const], priority: 0.7 },
       },
     ],
-    structuredContent: {
-      ok: true,
-      message: label,
-      data,
-    },
   };
 };
+
+const screenshotPayload = async (computer: Computer, label: string) =>
+  buildScreenshotToolResult(await computer.screenshot(), label);
+
+const screenshotRegionPayload = async (
+  computer: Computer,
+  rect: Rectangle,
+  coordinateSpace: CoordinateSpace,
+) =>
+  buildScreenshotToolResult(
+    await computer.screenshotRegion(rect, coordinateSpace),
+    "Screenshot region",
+    { rect, coordinateSpace },
+  );
 
 const dragPathFromArgs = (args: {
   path?: Point[];
@@ -102,9 +139,8 @@ export const createServer = (options: ServerOptions = {}) => {
     {
       title: "Observe Screen",
       description:
-        "Capture the current screen and return an image plus coordinate metadata. Use this after each desktop action before deciding the next step.",
+        "Capture the current screen and return a vision-sized image plus coordinate metadata. Use this after each desktop action before deciding the next step. If a small area is unclear, call screenshot_region for a closer crop.",
       inputSchema: {},
-      outputSchema: actionOutputSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => screenshotPayload(computer, "Observed screen"),
@@ -115,12 +151,34 @@ export const createServer = (options: ServerOptions = {}) => {
     {
       title: "Screenshot",
       description:
-        "Capture the current screen as a PNG image. Mouse tools default to native macOS coordinates, not Retina PNG pixels.",
+        "Capture the current screen as a vision-sized image. Mouse tools default to native macOS coordinates, not Retina PNG pixels. If text is too small, call screenshot_region.",
       inputSchema: {},
-      outputSchema: actionOutputSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => screenshotPayload(computer, "Screenshot"),
+  );
+
+  server.registerTool(
+    "screenshot_region",
+    {
+      title: "Screenshot Region",
+      description:
+        "Capture a cropped/zoomed screen region and return it as an image. Use this when observe/screenshot is visually available but an input, button, or saved-account popup is too small to read. Coordinates default to native macOS coordinates.",
+      inputSchema: {
+        x: z.number().describe("Left edge of the region"),
+        y: z.number().describe("Top edge of the region"),
+        width: z.number().positive().describe("Region width"),
+        height: z.number().positive().describe("Region height"),
+        coordinate_space: coordinateSpaceSchema,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ x, y, width, height, coordinate_space }) =>
+      screenshotRegionPayload(
+        computer,
+        { x, y, width, height },
+        (coordinate_space ?? "native") as CoordinateSpace,
+      ),
   );
 
   server.registerTool(

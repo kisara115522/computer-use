@@ -10,6 +10,7 @@ import { getPermissionReport, openPermissionSettings } from "./permissions.js";
 import type {
   CoordinateSpace,
   DisplayInfo,
+  Rectangle,
   Point,
   MouseButton,
   Modifier,
@@ -31,6 +32,14 @@ export class Computer {
   /** Capture the current screen as base64 PNG */
   async screenshot(): Promise<ScreenshotResult> {
     return screen.captureScreen();
+  }
+
+  /** Capture a cropped screen region as base64 PNG plus a vision-sized preview */
+  async screenshotRegion(
+    rect: Rectangle,
+    coordinateSpace: CoordinateSpace = "native",
+  ): Promise<ScreenshotResult> {
+    return screen.captureScreenRegion(rect, coordinateSpace);
   }
 
   /** Save current screen to Desktop as PNG */
