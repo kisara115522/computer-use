@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { readFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ScreenshotResult, Size } from "../types.js";
+import { getDisplayInfo, readPngSize, withScreenshotSize } from "./display.js";
 
 /**
  * macOS screen capture using the native `screencapture` command.
@@ -13,53 +14,71 @@ export const captureScreen = async (): Promise<ScreenshotResult> => {
   const tmpFile = join(tmpdir(), `cu-${randomUUID()}.png`);
 
   await new Promise<void>((resolve, reject) => {
-    execFile("/usr/sbin/screencapture", ["-x", "-C", tmpFile], (err) => {
-      if (err) reject(err);
-      else resolve();
+    execFile("/usr/sbin/screencapture", ["-x", tmpFile], (err, _stdout, stderr) => {
+      if (err) {
+        reject(
+          new Error(
+            `Screen capture failed: ${stderr.trim() || err.message}. Grant Screen Recording permission to the app running this MCP server.`,
+          ),
+        );
+      } else {
+        resolve();
+      }
     });
   });
 
   const buf = await readFile(tmpFile);
   await unlink(tmpFile).catch(() => {});
 
-  const size = await getScreenSize();
+  const size = readPngSize(buf);
+  const display = withScreenshotSize(await getDisplayInfo(), size);
 
   return {
     base64: buf.toString("base64"),
     mimeType: "image/png",
     size,
+    nativeSize: display.logicalSize,
+    scale: display.scale,
+    display,
   };
 };
 
-/** Get main display resolution via system_profiler */
-export const getScreenSize = async (): Promise<Size> => {
-  const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
-    execFile(
-      "/usr/sbin/system_profiler",
-      ["SPDisplaysDataType", "-json"],
-      (err, stdout) => {
-        if (err) reject(err);
-        else resolve({ stdout });
-      },
-    );
+const screenshotError = (stderr: string, fallback: string): Error =>
+  new Error(
+    `Screen capture failed: ${stderr.trim() || fallback}. Grant Screen Recording permission to the app running this MCP server.`,
+  );
+
+const captureToFile = async (filePath: string): Promise<Size> => {
+  await new Promise<void>((resolve, reject) => {
+    execFile("/usr/sbin/screencapture", ["-x", filePath], (err, _stdout, stderr) => {
+      if (err) reject(screenshotError(stderr, err.message));
+      else resolve();
+    });
   });
 
-  const data = JSON.parse(stdout) as {
-    SPDisplaysDataType?: Array<{
-      sppci_displays?: Array<{
-        _spdisplays_resolution?: string;
-      }>;
-    }>;
-  };
+  const buf = await readFile(filePath);
+  return readPngSize(buf);
+};
 
-  const display = data.SPDisplaysDataType?.[0]?.sppci_displays?.[0];
-  if (!display?._spdisplays_resolution) {
-    return { width: 1920, height: 1080 };
-  }
+const safeScreenshotFilename = (filename?: string): string => {
+  const fallback = `computer-use-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+  const raw = basename(filename?.trim() || fallback);
+  const cleaned = raw.replace(/[^A-Za-z0-9._-]/g, "-");
+  return cleaned.toLowerCase().endsWith(".png") ? cleaned : `${cleaned}.png`;
+};
 
-  // Format: "1920 x 1080"
-  const match = display._spdisplays_resolution.match(/(\d+)\s*x\s*(\d+)/);
-  if (!match) return { width: 1920, height: 1080 };
+export const saveScreenToDesktop = async (
+  filename?: string,
+): Promise<{ path: string; size: Size }> => {
+  const desktop = join(process.env.HOME ?? tmpdir(), "Desktop");
+  await mkdir(desktop, { recursive: true });
+  const path = join(desktop, safeScreenshotFilename(filename));
+  const size = await captureToFile(path);
+  return { path, size };
+};
 
-  return { width: Number(match[1]), height: Number(match[2]) };
+/** Get main display size in native macOS/nut-js coordinates. */
+export const getScreenSize = async (): Promise<Size> => {
+  const display = await getDisplayInfo();
+  return display.logicalSize;
 };

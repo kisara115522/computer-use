@@ -2,7 +2,23 @@ import * as screen from "./screen.js";
 import * as mouse from "./mouse.js";
 import * as keyboard from "./keyboard.js";
 import * as clipboard from "./clipboard.js";
-import type { Point, MouseButton, Modifier, KeyName, ScrollDirection, ScreenshotResult, Size } from "../types.js";
+import * as app from "./app.js";
+import * as windowState from "./window.js";
+import { getDisplayInfo } from "./display.js";
+import { getPermissionReport, openPermissionSettings } from "./permissions.js";
+import type {
+  CoordinateSpace,
+  DisplayInfo,
+  Point,
+  MouseButton,
+  Modifier,
+  KeyName,
+  ScrollDirection,
+  ScreenshotResult,
+  Size,
+} from "../types.js";
+import type { TypeMethod } from "./keyboard.js";
+import type { BrowserState } from "./window.js";
 
 /**
  * Unified computer control interface.
@@ -15,29 +31,66 @@ export class Computer {
     return screen.captureScreen();
   }
 
+  /** Save current screen to Desktop as PNG */
+  async saveScreenshot(filename?: string): Promise<{ path: string; size: Size }> {
+    return screen.saveScreenToDesktop(filename);
+  }
+
   /** Get main display resolution */
   async screenSize(): Promise<Size> {
     return screen.getScreenSize();
   }
 
+  /** Get main display metadata */
+  async displayInfo(): Promise<DisplayInfo> {
+    return getDisplayInfo();
+  }
+
+  /** Get macOS permission diagnostics */
+  permissions() {
+    return getPermissionReport();
+  }
+
+  /** Open macOS privacy settings to a relevant permission pane */
+  async openPermissionSettings(
+    pane: "accessibility" | "screen" | "input-monitoring" = "accessibility",
+  ): Promise<void> {
+    return openPermissionSettings(pane);
+  }
+
   /** Move cursor to position */
-  async mouseMove(p: Point): Promise<void> {
-    return mouse.move(p);
+  async mouseMove(
+    p: Point,
+    coordinateSpace: CoordinateSpace = "native",
+  ): Promise<void> {
+    return mouse.move(p, coordinateSpace);
   }
 
   /** Click at position */
-  async click(p: Point, button: MouseButton = "left"): Promise<void> {
-    return mouse.click(p, button);
+  async click(
+    p: Point,
+    button: MouseButton = "left",
+    coordinateSpace: CoordinateSpace = "native",
+  ): Promise<void> {
+    return mouse.click(p, button, coordinateSpace);
   }
 
   /** Double-click at position */
-  async doubleClick(p: Point): Promise<void> {
-    return mouse.doubleClick(p);
+  async doubleClick(
+    p: Point,
+    coordinateSpace: CoordinateSpace = "native",
+  ): Promise<void> {
+    return mouse.doubleClick(p, coordinateSpace);
   }
 
   /** Drag from start to end */
-  async drag(start: Point, end: Point): Promise<void> {
-    return mouse.drag(start, end);
+  async drag(
+    start: Point,
+    end: Point,
+    coordinateSpace: CoordinateSpace = "native",
+    path: Point[] = [],
+  ): Promise<void> {
+    return mouse.drag(start, end, coordinateSpace, path);
   }
 
   /** Scroll in direction */
@@ -46,8 +99,8 @@ export class Computer {
   }
 
   /** Type text string */
-  async type(text: string): Promise<void> {
-    return keyboard.type(text);
+  async type(text: string, method: TypeMethod = "auto"): Promise<void> {
+    return keyboard.type(text, method);
   }
 
   /** Press a key with optional modifiers */
@@ -55,9 +108,19 @@ export class Computer {
     return keyboard.press(key, modifiers);
   }
 
+  /** Press an agent-friendly key chord */
+  async keypress(keys: string[]): Promise<void> {
+    return keyboard.pressChord(keys);
+  }
+
   /** Hotkey combination */
   async hotkey(modifiers: Modifier[], key: KeyName): Promise<void> {
     return keyboard.hotkey(modifiers, key);
+  }
+
+  /** Get current cursor position */
+  async cursorPosition(): Promise<Point> {
+    return mouse.position();
   }
 
   /** Read clipboard */
@@ -68,5 +131,32 @@ export class Computer {
   /** Write clipboard */
   async clipboardWrite(text: string): Promise<void> {
     return clipboard.write(text);
+  }
+
+  /** Open a URL through Launch Services */
+  async openUrl(url: string, options: { app?: string; waitMs?: number } = {}): Promise<void> {
+    return app.openUrl(url, options);
+  }
+
+  /** Open a macOS application by display name */
+  async openApp(name: string, options: { waitMs?: number } = {}): Promise<void> {
+    return app.openApp(name, options);
+  }
+
+  /** List installed macOS apps */
+  async listApps(): Promise<string[]> {
+    return app.listApps();
+  }
+
+  /** Return frontmost macOS app name */
+  async frontmostApp(): Promise<string> {
+    return windowState.frontmostApp();
+  }
+
+  /** Return active browser tab title/URL when Chrome or Safari is available */
+  async browserState(
+    preferred?: "Google Chrome" | "Safari",
+  ): Promise<BrowserState> {
+    return windowState.browserState(preferred);
   }
 }

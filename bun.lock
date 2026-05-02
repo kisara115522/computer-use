@@ -6,6 +6,7 @@
       "name": "computer-use",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.12.1",
+        "@nut-tree-fork/node-mac-permissions": "^2.2.1",
         "@nut-tree-fork/nut-js": "^4.2.0",
         "pino": "^9.6.0",
       },
