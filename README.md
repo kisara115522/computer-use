@@ -86,6 +86,7 @@ Pass `coordinate_space: "screenshot"` only when you intentionally have full Reti
 | `open_app` | Open an app by name, e.g. `Safari` |
 | `frontmost_app` | Verify which macOS app is currently focused |
 | `browser_state` | Verify Chrome/Safari active tab title and URL |
+| `screen_ocr` | Read visible screen text with native-coordinate bounding boxes |
 | `list_apps` | List installed apps in common Applications folders |
 | `cursor_position` | Return current cursor position in native coordinates |
 | `clipboard_read` | Read system clipboard |

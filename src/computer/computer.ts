@@ -4,6 +4,7 @@ import * as keyboard from "./keyboard.js";
 import * as clipboard from "./clipboard.js";
 import * as app from "./app.js";
 import * as windowState from "./window.js";
+import * as ocr from "./ocr.js";
 import { getDisplayInfo } from "./display.js";
 import { getPermissionReport, openPermissionSettings } from "./permissions.js";
 import type {
@@ -19,6 +20,7 @@ import type {
 } from "../types.js";
 import type { TypeMethod } from "./keyboard.js";
 import type { BrowserState } from "./window.js";
+import type { ScreenOcrOptions } from "./ocr.js";
 
 /**
  * Unified computer control interface.
@@ -158,5 +160,10 @@ export class Computer {
     preferred?: "Google Chrome" | "Safari",
   ): Promise<BrowserState> {
     return windowState.browserState(preferred);
+  }
+
+  /** OCR the current screen and return recognized text with native-coordinate boxes */
+  async screenOcr(options: ScreenOcrOptions = {}) {
+    return ocr.screenOcr(options);
   }
 }

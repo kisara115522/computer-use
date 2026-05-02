@@ -7,3 +7,4 @@ export * as display from "./display.js";
 export * as permissions from "./permissions.js";
 export * as app from "./app.js";
 export * as window from "./window.js";
+export * as ocr from "./ocr.js";

@@ -44,6 +44,8 @@ Entry: `src/index.ts` → `src/server.ts` (registers all tools) → tools call `
 
 - For `cu-desktop`, use `observe` first and after user-visible actions.
 - Mouse coordinates are native macOS logical coordinates (`nativeWidth`/`nativeHeight` from `observe`), not Retina PNG pixel coordinates.
+- If screenshot images are not visible to the model, use `screen_ocr` and `browser_state` instead of guessing coordinates.
+- Use `screen_ocr` with `numericOnly: true` or `pattern: "^181"` to locate saved phone-number suggestions.
 - After browser navigation or login attempts, call `browser_state` and/or `observe` before claiming success.
 - Do not infer that login succeeded from a successful click. Verify the active tab URL/title or visible page state first.
 - Use `save_screenshot` for "save a screenshot to Desktop"; do not use Bash for that workflow.

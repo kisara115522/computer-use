@@ -489,6 +489,36 @@ export const createServer = (options: ServerOptions = {}) => {
   );
 
   server.registerTool(
+    "screen_ocr",
+    {
+      title: "Screen OCR",
+      description:
+        "Read visible screen text with native-coordinate bounding boxes. Use this when screenshot images are not visible to the model, especially to locate saved phone numbers or numeric options before clicking.",
+      inputSchema: {
+        pattern: z
+          .string()
+          .optional()
+          .describe("Optional JavaScript regex pattern to filter recognized text, e.g. '^181'."),
+        minConfidence: z
+          .number()
+          .optional()
+          .describe("Minimum OCR confidence, default 35."),
+        numericOnly: z
+          .boolean()
+          .optional()
+          .describe("Use numeric OCR model only. Helpful for phone-number autofill lists."),
+      },
+      outputSchema: actionOutputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ pattern, minConfidence, numericOnly }) =>
+      ok(
+        "Screen OCR",
+        await computer.screenOcr({ pattern, minConfidence, numericOnly }),
+      ),
+  );
+
+  server.registerTool(
     "open_url",
     {
       title: "Open URL",

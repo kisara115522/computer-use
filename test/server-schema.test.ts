@@ -54,5 +54,6 @@ describe("MCP tool schemas", () => {
 
     expect(tools).toContain("frontmost_app");
     expect(tools).toContain("browser_state");
+    expect(tools).toContain("screen_ocr");
   });
 });
